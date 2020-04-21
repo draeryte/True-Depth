@@ -12,22 +12,23 @@ import ARKit
 
 class ViewController: UIViewController, ARSCNViewDelegate {
 
+    var analysis = ""
+    @IBOutlet weak var faceLabel: UILabel!
+    @IBOutlet weak var labelView: UIView!
+    
     @IBOutlet var sceneView: ARSCNView!
     
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        // Set the view's delegate
-        sceneView.delegate = self
+        labelView.layer.cornerRadius = 10
         
-        // Show statistics such as fps and timing information
+        sceneView.delegate = self
         sceneView.showsStatistics = true
         
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
+        guard  ARFaceTrackingConfiguration.isSupported else {
+            fatalError("Face tracking ia not supported on this device")
+        }
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -48,6 +49,22 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     }
 
     // MARK: - ARSCNViewDelegate
+    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
+        let faceMesh = ARSCNFaceGeometry(device: sceneView.device!)
+        let node = SCNNode(geometry: faceMesh)
+        node.geometry?.firstMaterial?.fillMode = .lines
+        return node
+    }
+    func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
+        if let faceAnchor = anchor as? ARFaceAnchor, let faceGeometry = node.geometry as? ARSCNFaceGeometry {
+            faceGeometry.update(from: faceAnchor.geometry)
+            expression(anchor: faceAnchor)
+            
+            DispatchQueue.main.async {
+                self.faceLabel.text = self.analysis
+            }
+        }
+    }
     
 /*
     // Override to create and configure nodes for anchors added to the view's session.
@@ -71,5 +88,26 @@ class ViewController: UIViewController, ARSCNViewDelegate {
     func sessionInterruptionEnded(_ session: ARSession) {
         // Reset tracking and/or remove existing anchors if consistent tracking is required
         
+    }
+    func expression(anchor: ARFaceAnchor) {
+        // 1
+        let smileLeft = anchor.blendShapes[.mouthSmileLeft]
+        let smileRight = anchor.blendShapes[.mouthSmileRight]
+        let cheekPuff = anchor.blendShapes[.cheekPuff]
+        let tongue = anchor.blendShapes[.tongueOut]
+        self.analysis = ""
+     
+        // 2
+        if ((smileLeft?.decimalValue ?? 0.0) + (smileRight?.decimalValue ?? 0.0)) > 0.9 {
+            self.analysis += "You are smiling. "
+        }
+     
+        if cheekPuff?.decimalValue ?? 0.0 > 0.1 {
+            self.analysis += "Your cheeks are puffed. "
+        }
+     
+        if tongue?.decimalValue ?? 0.0 > 0.1 {
+            self.analysis += "Why are you trying to lick air?! "
+        }
     }
 }
